@@ -2,6 +2,12 @@
 
 Revai provides offline AI chat and turns PDF, DOCX, PPTX, Org mode, Markdown, and plain-text documents into a study quiz or printable exam. It is an Android-first Flutter app. Chat, document text, and generation stay on the device. Download a local AI model once, then use it offline.
 
+## Project documentation
+
+- [Architecture](docs/architecture.md) — app layers, services, and data flows.
+- [Features](docs/features.md) — user workflows and supported behavior.
+- [Tech stack](docs/tech-stack.md) — runtime, packages, and platform requirements.
+
 ## Requirements
 
 - Flutter 3.44+ and Dart 3.12+
@@ -73,3 +79,13 @@ Tests cover import ordering and encodings, legacy quiz migration, concurrent lib
 ## Local data
 
 Saved quizzes and folders are stored in `quiz_library.json` in the app's private documents directory. Existing `saved_quizzes.json` data is read and migrated on the first library change. Writes are serialized and replaced atomically to preserve concurrent saves. Theme preferences are stored separately in `theme.json`; model selection is stored in `model_preferences.json`. Removing a quiz deletes its saved record. The original source file is not copied into the quiz record.
+
+## Source layout
+
+- `lib/main.dart` — app startup, home screen, quiz setup, review, editing, and study screens.
+- `lib/widgets/` — model management, chat, generation queue, and quiz library UI.
+- `lib/services/` — document import, local inference, quiz generation and validation, storage, notifications, preferences, and PDF export.
+- `lib/models/` — quiz, question, folder, and source-document data types.
+- `lib/theme/` — shared app theme and color extensions.
+- `android/` — Android host, device readiness bridge, and generation foreground service.
+- `test/` — Flutter unit and widget tests.
