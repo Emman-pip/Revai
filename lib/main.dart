@@ -301,19 +301,10 @@ class _HomePageState extends State<HomePage> {
                       sliver: SliverList.list(
                         children: [
                           _topBar(),
-                          const SizedBox(height: 24),
-                          _hero(),
+                          const SizedBox(height: 20),
+                          _homeActions(),
                           const SizedBox(height: 18),
                           _modelCard(),
-                          const SizedBox(height: 10),
-                          OutlinedButton.icon(
-                            onPressed:
-                                modelInstalled && widget.modelInitError == null
-                                ? _openChat
-                                : null,
-                            icon: const Icon(Icons.chat_bubble_outline_rounded),
-                            label: const Text('Chat with AI'),
-                          ),
                           if (!modelInstalled || widget.modelInitError != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
@@ -383,21 +374,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: isPicking ? null : _pickDocument,
-        backgroundColor: context.colors.primary,
-        foregroundColor: context.colors.onPrimary,
-        icon: isPicking
-            ? SizedBox.square(
-                dimension: 19,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: context.colors.onPrimary,
-                ),
-              )
-            : const Icon(Icons.add_rounded),
-        label: Text(isPicking ? 'Opening file…' : 'New quiz'),
-      ),
     );
   }
 
@@ -431,82 +407,110 @@ class _HomePageState extends State<HomePage> {
     ],
   );
 
-  Widget _hero() => Container(
-    padding: const EdgeInsets.all(22),
-    decoration: BoxDecoration(
-      color: context.colors.primaryContainer,
-      borderRadius: BorderRadius.circular(26),
-    ),
-    child: Stack(
-      children: [
-        Positioned(
-          right: 0,
-          top: 0,
-          child: Icon(
-            Icons.auto_stories_rounded,
-            size: 88,
-            color: context.colors.onPrimaryContainer.withValues(alpha: .08),
-          ),
+  Widget _homeActions() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'What would you like to do?',
+        style: TextStyle(
+          color: context.colors.onSurface,
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -.4,
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+      const SizedBox(height: 12),
+      _homeActionCard(
+        title: 'Chat with AI',
+        description: 'Ask questions and explore ideas with your offline AI.',
+        icon: Icons.chat_bubble_outline_rounded,
+        enabled:
+            modelInstalled && widget.modelInitError == null,
+        onTap: _openChat,
+      ),
+      const SizedBox(height: 10),
+      _homeActionCard(
+        title: 'Quiz Maker',
+        description: 'Create a study quiz from a document on your device.',
+        icon: Icons.auto_stories_rounded,
+        enabled: !isPicking,
+        onTap: _pickDocument,
+        loading: isPicking,
+      ),
+    ],
+  );
+
+  Widget _homeActionCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+    bool loading = false,
+  }) => Material(
+    color: context.colors.surfaceContainerLow,
+    borderRadius: BorderRadius.circular(20),
+    child: InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 98),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: context.colors.outlineVariant),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: context.colors.secondaryContainer,
-                borderRadius: BorderRadius.circular(20),
+                color: context.colors.primaryContainer,
+                borderRadius: BorderRadius.circular(15),
               ),
-              child: Text(
-                'STUDY, YOUR WAY',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 9,
-                  letterSpacing: 1.1,
-                  color: context.colors.onSecondaryContainer,
-                ),
-              ),
+              child: loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(icon, color: context.colors.primary),
             ),
-            const SizedBox(height: 19),
-            Text(
-              'Turn reading\ninto remembering.',
-              style: TextStyle(
-                fontSize: 30,
-                height: 1.1,
-                fontWeight: FontWeight.w800,
-                color: context.colors.onPrimaryContainer,
-                letterSpacing: -.8,
-              ),
-            ),
-            const SizedBox(height: 11),
-            Text(
-              'Build a study quiz from your own notes.',
-              style: TextStyle(
-                color: context.colors.onPrimaryContainer.withValues(alpha: .72),
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 20),
-            OutlinedButton.icon(
-              onPressed: isPicking ? null : _pickDocument,
-              icon: const Icon(Icons.upload_file_rounded, size: 18),
-              label: const Text('Choose a document'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: context.colors.onPrimaryContainer,
-                side: BorderSide(
-                  color: context.colors.onPrimaryContainer.withValues(
-                    alpha: .35,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: context.colors.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 15,
-                  vertical: 13,
-                ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: context.colors.onSurfaceVariant,
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
               ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_rounded,
+              color: enabled
+                  ? context.colors.primary
+                  : context.colors.onSurfaceVariant,
             ),
           ],
         ),
-      ],
+      ),
     ),
   );
 
@@ -676,6 +680,43 @@ class _SetupPageState extends State<SetupPage> {
   int _value(TextEditingController controller) =>
       int.tryParse(controller.text) ?? 0;
 
+  void _rebalanceDifficulty() {
+    final total = mode == ExamMode.multipleChoice
+        ? _value(mcCount)
+        : mode == ExamMode.identification
+        ? _value(idCount)
+        : _value(mcCount) + _value(idCount);
+    final oldEasy = _value(easyCount);
+    final oldMedium = _value(mediumCount);
+    final oldHard = _value(hardCount);
+    final oldTotal = oldEasy + oldMedium + oldHard;
+    if (total <= 0) {
+      easyCount.text = '0';
+      mediumCount.text = '0';
+      hardCount.text = '0';
+      return;
+    }
+    if (oldTotal <= 0) {
+      easyCount.text = '${total ~/ 3}';
+      hardCount.text = '${total ~/ 3}';
+      mediumCount.text = '${total - 2 * (total ~/ 3)}';
+      return;
+    }
+    final easy = oldEasy * total ~/ oldTotal;
+    final hard = oldHard * total ~/ oldTotal;
+    easyCount.text = '$easy';
+    hardCount.text = '$hard';
+    // Assign all rounding remainder to medium to keep the displayed total exact.
+    mediumCount.text = '${total - easy - hard}';
+  }
+
+  void _questionCountChanged(String _) {
+    setState(() {
+      _rebalanceDifficulty();
+      error = null;
+    });
+  }
+
   Future<void> _generate() async {
     final mc = mode == ExamMode.identification ? 0 : _value(mcCount);
     final id = mode == ExamMode.multipleChoice ? 0 : _value(idCount);
@@ -792,10 +833,22 @@ class _SetupPageState extends State<SetupPage> {
           Row(
             children: [
               if (mode != ExamMode.identification)
-                Expanded(child: _numberField('Multiple choice', mcCount)),
+                Expanded(
+                  child: _numberField(
+                    'Multiple choice',
+                    mcCount,
+                    onChanged: _questionCountChanged,
+                  ),
+                ),
               if (mode == ExamMode.hybrid) const SizedBox(width: 9),
               if (mode != ExamMode.multipleChoice)
-                Expanded(child: _numberField('Identification', idCount)),
+                Expanded(
+                  child: _numberField(
+                    'Identification',
+                    idCount,
+                    onChanged: _questionCountChanged,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 17),
@@ -907,6 +960,7 @@ class _SetupPageState extends State<SetupPage> {
           easyCount.text = '3';
           mediumCount.text = '4';
           hardCount.text = '3';
+          _rebalanceDifficulty();
         }),
         borderRadius: BorderRadius.circular(16),
         child: Container(
@@ -998,21 +1052,27 @@ class _SetupPageState extends State<SetupPage> {
     ],
   );
 
-  Widget _numberField(String label, TextEditingController controller) =>
-      TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 14,
-          ),
-        ),
-      );
+  Widget _numberField(
+    String label,
+    TextEditingController controller, {
+    void Function(String)? onChanged,
+  }) => TextField(
+    controller: controller,
+    keyboardType: TextInputType.number,
+    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+    onChanged: (value) {
+      if (onChanged != null) {
+        onChanged(value);
+      } else {
+        setState(() {});
+      }
+    },
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    ),
+  );
 }
 
 class ReviewPage extends StatefulWidget {

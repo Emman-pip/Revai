@@ -64,6 +64,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.text('What would you like to do?'), findsOneWidget);
+    expect(find.text('Chat with AI'), findsOneWidget);
+    expect(find.text('Quiz Maker'), findsOneWidget);
+    expect(find.text('New quiz'), findsNothing);
     expect(find.text('ON DEVICE'), findsNothing);
     expect(find.byTooltip('Switch to dark theme'), findsOneWidget);
     await tester.tap(find.byTooltip('Switch to dark theme'));
