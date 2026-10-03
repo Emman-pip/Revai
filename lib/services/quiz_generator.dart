@@ -30,18 +30,30 @@ class QuizSettings {
 }
 
 class QuizGenerator {
+  static const _maxRepairAttempts = 3;
+
   QuizGenerator(this.model);
   final LocalModelService model;
 
-  Future<SavedQuiz> generate(
+  void validateRequest(SourceDocument document, QuizSettings settings) {
+    _prepareSource(document, settings);
+  }
+
+  ({List<SourceSection> sections, String source}) _prepareSource(
     SourceDocument document,
-    QuizSettings settings, {
-    GenerationCancellation? cancellation,
-    void Function(String)? onStage,
-    void Function(String)? onOutput,
-  }) async {
-    cancellation?.check();
-    onStage?.call('Preparing source');
+    QuizSettings settings,
+  ) {
+    final selected = model.selectedModel;
+    if (selected == null) {
+      throw StateError('Download and select an AI model on the home screen.');
+    }
+    if (settings.totalCount < 1 ||
+        settings.totalCount > selected.maxQuizQuestions) {
+      throw StateError(
+        '${selected.name} supports 1–${selected.maxQuizQuestions} questions per quiz. '
+        'Reduce the question count or select another model.',
+      );
+    }
     final sections = document.sections
         .where(
           (section) =>
@@ -55,53 +67,111 @@ class QuizGenerator {
     final source = sections
         .map((section) => '[${section.id} | ${section.label}]\n${section.text}')
         .join('\n\n');
-    if (source.length > 26000) {
+    if (source.length > selected.maxSourceCharacters) {
       throw StateError(
-        'This selection is too long for one generation. Narrow the page or section coverage and try again.',
+        '${selected.name} supports up to ${selected.maxSourceCharacters} source characters per quiz. '
+        'Narrow the page or section coverage, or select another model.',
       );
     }
-    final prompt = _prompt(source, settings);
-    onStage?.call('Writing questions');
-    final raw = await model.generate(
-      prompt,
-      cancellation: cancellation,
-      onToken: onOutput,
-    );
-    cancellation?.check();
-    onStage?.call('Checking answers and sources');
-    late List<QuizQuestion> generated;
-    try {
-      generated = _parse(raw, sections);
-    } on _QuizResponseFormatException {
-      cancellation?.check();
-      onStage?.call('Repairing response format');
-      final repaired = await model.generate(
-        '''Repair the previous model response into the required JSON format. Return exactly one JSON object with a top-level "questions" array. Preserve its question content and do not add prose or Markdown. If content cannot be repaired, return {"questions":[]}.
+    return (sections: sections, source: source);
+  }
 
-Previous response:
-$raw''',
+  Future<SavedQuiz> generate(
+    SourceDocument document,
+    QuizSettings settings, {
+    GenerationCancellation? cancellation,
+    void Function(String)? onStage,
+    void Function(String)? onOutput,
+  }) async {
+    cancellation?.check();
+    final release = model.reserveSelection();
+    try {
+      onStage?.call('Preparing source');
+      final prepared = _prepareSource(document, settings);
+      final sections = prepared.sections;
+      final source = prepared.source;
+      final prompt = _prompt(source, settings);
+      onStage?.call('Writing questions');
+      var raw = await model.generate(
+        prompt,
         cancellation: cancellation,
         onToken: onOutput,
       );
       cancellation?.check();
       onStage?.call('Checking answers and sources');
-      try {
-        generated = _parse(repaired, sections);
-      } on _QuizResponseFormatException {
-        generated = const [];
+      var feedback = _jsonValidationError(raw);
+      var generated = _salvageQuestions(raw, sections);
+      for (
+        var attempt = 1;
+        feedback != null && attempt <= _maxRepairAttempts;
+        attempt++
+      ) {
+        cancellation?.check();
+        onStage?.call(
+          'Repairing response format ($attempt/$_maxRepairAttempts)',
+        );
+        raw = await model.generate(
+          '''Fix the JSON validation error below. Return exactly one JSON object with a top-level "questions" array. Preserve all recoverable questions and their content. Do not add prose or Markdown.
+
+Validation feedback:
+$feedback
+
+Previous response:
+$raw''',
+          cancellation: cancellation,
+          onToken: onOutput,
+        );
+        cancellation?.check();
+        onStage?.call('Checking answers and sources');
+        feedback = _jsonValidationError(raw);
+        final repairedQuestions = _salvageQuestions(raw, sections);
+        if (repairedQuestions.length >= generated.length) {
+          generated = repairedQuestions;
+        }
       }
+
+      // Keep the most complete recoverable set if the repair budget is spent.
+      final balanced = _balanceOptions(generated);
+      return SavedQuiz(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        title: settings.title.trim().isEmpty
+            ? 'Untitled quiz'
+            : settings.title.trim(),
+        documentName: document.name,
+        createdAt: DateTime.now(),
+        mode: settings.mode,
+        questions: balanced,
+      );
+    } finally {
+      release();
     }
-    final balanced = _balanceOptions(generated);
-    return SavedQuiz(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: settings.title.trim().isEmpty
-          ? 'Untitled quiz'
-          : settings.title.trim(),
-      documentName: document.name,
-      createdAt: DateTime.now(),
-      mode: settings.mode,
-      questions: balanced,
-    );
+  }
+
+  String? _jsonValidationError(String raw) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException catch (error) {
+      return 'Invalid JSON syntax: ${error.message}';
+    }
+    if (decoded is! Map<String, dynamic>) {
+      return 'The JSON root must be an object.';
+    }
+    if (decoded['questions'] is! List) {
+      return 'The JSON object must contain a "questions" array.';
+    }
+    return null;
+  }
+
+  List<QuizQuestion> _salvageQuestions(
+    String raw,
+    List<SourceSection> sections,
+  ) {
+    try {
+      return _parse(raw, sections);
+    } on _QuizResponseFormatException {
+      return const [];
+    }
   }
 
   String _prompt(String source, QuizSettings settings) {
