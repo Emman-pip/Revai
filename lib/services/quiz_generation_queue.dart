@@ -23,10 +23,20 @@ class GenerationJob {
     required this.document,
     required this.settings,
     this.folderId,
+    this.onReleaseModel,
   });
   final SourceDocument document;
   final QuizSettings settings;
   final String? folderId;
+  final VoidCallback? onReleaseModel;
+  bool _reservationReleased = false;
+
+  void _releaseReservation() {
+    if (_reservationReleased) return;
+    _reservationReleased = true;
+    onReleaseModel?.call();
+  }
+
   final cancellation = GenerationCancellation();
   GenerationStatus status = GenerationStatus.queued;
   String stage = 'Waiting for the model';
@@ -69,29 +79,43 @@ class QuizGenerationQueue extends ChangeNotifier {
     SourceDocument document,
     QuizSettings settings, {
     String? folderId,
-  }) => _serviceOperation(() async {
-    if (!_jobs.any((job) => !job.finished)) {
-      try {
-        final allowed = await notifications.requestPermission();
-        notificationNotice = allowed
-            ? null
-            : 'Notifications are off. Follow progress here.';
-        await notifications.start();
-      } catch (_) {
-        notificationNotice =
-            'Background notifications are unavailable. Keep Revai open while generating.';
+  }) {
+    generator.validateRequest(document, settings);
+    // Reserve before notification permission or other async work. A queued
+    // request must continue to use the model selected when it was submitted.
+    final release = generator.model.reserveSelection();
+    return _serviceOperation(() async {
+      if (!_jobs.any((job) => !job.finished)) {
+        try {
+          final allowed = await notifications.requestPermission();
+          notificationNotice = allowed
+              ? null
+              : 'Notifications are off. Follow progress here.';
+          await notifications.start();
+        } catch (_) {
+          notificationNotice =
+              'Background notifications are unavailable. Keep Revai open while generating.';
+        }
       }
-    }
-    _jobs.add(
-      GenerationJob(document: document, settings: settings, folderId: folderId),
-    );
-    final active = _jobs
-        .where((job) => job.status == GenerationStatus.running)
-        .firstOrNull;
-    if (active != null) unawaited(_updateNotification(active));
-    notifyListeners();
-    unawaited(_pump());
-  });
+      _jobs.add(
+        GenerationJob(
+          document: document,
+          settings: settings,
+          folderId: folderId,
+          onReleaseModel: release,
+        ),
+      );
+      final active = _jobs
+          .where((job) => job.status == GenerationStatus.running)
+          .firstOrNull;
+      if (active != null) unawaited(_updateNotification(active));
+      notifyListeners();
+      unawaited(_pump());
+    }).catchError((Object error, StackTrace stack) {
+      release();
+      Error.throwWithStackTrace(error, stack);
+    });
+  }
 
   Future<void> _updateNotification(GenerationJob job) async {
     try {
@@ -113,6 +137,7 @@ class QuizGenerationQueue extends ChangeNotifier {
         ? GenerationStatus.cancelled
         : GenerationStatus.stopping;
     job.stage = wasQueued ? 'Cancelled' : 'Stopping the model…';
+    if (wasQueued) job._releaseReservation();
     notifyListeners();
     final active = wasQueued
         ? _jobs
@@ -208,6 +233,8 @@ class QuizGenerationQueue extends ChangeNotifier {
             job.stage = 'Could not generate quiz';
             job.error = error.toString().replaceFirst('Bad state: ', '');
           }
+        } finally {
+          job._releaseReservation();
         }
         notifyListeners();
         if (job.status != GenerationStatus.cancelled) {

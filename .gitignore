@@ -10,3 +10,4 @@
 /android/local.properties
 /android/key.properties
 *.iml
+.revai-git/

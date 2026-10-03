@@ -85,12 +85,29 @@ class GenerationJobsPanel extends StatelessWidget {
                                       if (value == 'manual') {
                                         await queue.createManualDraft(job);
                                       } else {
-                                        await queue.enqueue(
-                                          job.document,
-                                          job.settings,
-                                          folderId: job.folderId,
-                                        );
-                                        queue.dismiss(job);
+                                        try {
+                                          await queue.enqueue(
+                                            job.document,
+                                            job.settings,
+                                            folderId: job.folderId,
+                                          );
+                                          queue.dismiss(job);
+                                        } catch (error) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  error.toString().replaceFirst(
+                                                    'Bad state: ',
+                                                    '',
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        }
                                       }
                                     },
                                     itemBuilder: (_) => const [

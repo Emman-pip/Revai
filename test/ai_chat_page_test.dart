@@ -89,6 +89,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'Hello');
+    await tester.pump();
     await tester.tap(find.byTooltip('Send message'));
     await tester.pumpAndSettle();
     expect(find.text('Hello'), findsOneWidget);
@@ -109,6 +110,7 @@ void main() {
     expect(find.byType(MarkdownBody), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'How are you?');
+    await tester.pump();
     await tester.tap(find.byTooltip('Send message'));
     await tester.pumpAndSettle();
     expect(model.sessions.single.messages, ['Hello', 'How are you?']);
@@ -142,6 +144,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'Explain this');
+    await tester.pump();
     await tester.tap(find.byTooltip('Send message'));
     await tester.pump();
     expect(find.byTooltip('Cancel response'), findsOneWidget);

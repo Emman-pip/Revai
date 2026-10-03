@@ -136,7 +136,12 @@ class _AiChatPageState extends State<AiChatPage> {
     try {
       await session.cancelCurrentGeneration();
     } catch (error) {
-      if (mounted) setState(() => _error = _readableError(error));
+      if (mounted) {
+        setState(() {
+          _cancelRequested = false;
+          _error = _readableError(error);
+        });
+      }
     }
   }
 
@@ -159,7 +164,7 @@ class _AiChatPageState extends State<AiChatPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Chat with AI'),
+      title: Text(widget.model.selectedModel?.name ?? 'Chat with AI'),
       actions: [
         TextButton.icon(
           onPressed: _opening || _sending ? null : _newChat,
@@ -176,7 +181,14 @@ class _AiChatPageState extends State<AiChatPage> {
           MaterialBanner(
             content: Text(_error!),
             actions: [
-              TextButton(onPressed: _openSession, child: const Text('Retry')),
+              TextButton(
+                onPressed: _opening || _sending
+                    ? null
+                    : _session == null
+                    ? _openSession
+                    : _newChat,
+                child: Text(_session == null ? 'Retry' : 'New chat'),
+              ),
             ],
           ),
         Expanded(

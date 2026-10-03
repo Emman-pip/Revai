@@ -6,6 +6,7 @@ import 'package:revai/models/quiz.dart';
 import 'package:revai/services/generation_cancellation.dart';
 import 'package:revai/services/generation_notifications.dart';
 import 'package:revai/services/local_model_service.dart';
+import 'package:revai/services/model_catalog.dart';
 import 'package:revai/services/quiz_generation_queue.dart';
 import 'package:revai/services/quiz_generator.dart';
 import 'package:revai/services/quiz_storage.dart';
@@ -134,12 +135,18 @@ void main() {
       await queue.enqueue(document, settings('one'));
       await queue.enqueue(document, settings('two'));
       await until(() => generator.requests.length == 1);
+      expect(generator.model.isInUse, isTrue);
+      await expectLater(
+        generator.model.selectModel(localAiModels.last),
+        throwsStateError,
+      );
       await queue.cancel(queue.jobs[1]);
       generator.requests.first.result.complete(quiz('one'));
       await until(() => notifications.stops == 1);
       expect(generator.requests.length, 1);
       expect(queue.jobs[1].status, GenerationStatus.cancelled);
       expect((await storage.load()).map((item) => item.id), ['one']);
+      expect(generator.model.canManage, isTrue);
     },
   );
 
@@ -152,6 +159,7 @@ void main() {
       await until(() => generator.requests.length == 1);
       await queue.cancel(queue.jobs.first);
       expect(queue.jobs.first.status, GenerationStatus.stopping);
+      expect(generator.model.isInUse, isTrue);
       expect(generator.requests.length, 1);
       expect(await storage.load(), isEmpty);
       generator.requests.first.cleanup.complete();
@@ -162,6 +170,7 @@ void main() {
       await until(() => notifications.stops == 1);
       expect((await storage.load()).map((item) => item.id), ['two']);
       expect(notifications.completions, 1);
+      expect(generator.model.canManage, isTrue);
     },
   );
 

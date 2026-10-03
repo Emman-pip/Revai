@@ -5,7 +5,9 @@ class DeviceReadiness {
   static const _minimumStorage = 3 * 1024 * 1024 * 1024;
   static const _minimumMemory = 8 * 1024 * 1024 * 1024;
 
-  Future<String?> checkForModelDownload() async {
+  Future<String?> checkForModelDownload({
+    int requiredFreeBytes = _minimumStorage,
+  }) async {
     try {
       final values = await _channel.invokeMapMethod<String, int>(
         'getDeviceInfo',
@@ -19,8 +21,9 @@ class DeviceReadiness {
       if ((values['totalMemory'] ?? 0) < _minimumMemory) {
         return 'The local model needs a phone with at least 8 GB RAM.';
       }
-      if ((values['availableStorage'] ?? 0) < _minimumStorage) {
-        return 'Free at least 3 GB of storage, then try again.';
+      if ((values['availableStorage'] ?? 0) < requiredFreeBytes) {
+        final gigabytes = (requiredFreeBytes / 1000000000).toStringAsFixed(1);
+        return 'Free at least $gigabytes GB of storage, then try again.';
       }
       return null;
     } on PlatformException {

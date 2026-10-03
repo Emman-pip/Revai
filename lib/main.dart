@@ -8,7 +8,6 @@ import 'package:printing/printing.dart';
 
 import 'models/quiz.dart';
 import 'services/document_importer.dart';
-import 'services/device_readiness.dart';
 import 'services/local_model_service.dart';
 import 'services/quiz_generator.dart';
 import 'services/quiz_pdf_exporter.dart';
@@ -16,6 +15,7 @@ import 'services/quiz_storage.dart';
 import 'services/quiz_generation_queue.dart';
 import 'widgets/generation_jobs_panel.dart';
 import 'widgets/ai_chat_page.dart';
+import 'widgets/models_page.dart';
 import 'widgets/quiz_library_browser.dart';
 import 'services/theme_preferences.dart';
 import 'theme/app_theme.dart';
@@ -128,13 +128,10 @@ class _HomePageState extends State<HomePage> {
   QuizStorage get storage => widget.storage;
   final importer = DocumentImporter();
   final exporter = QuizPdfExporter();
-  final deviceReadiness = DeviceReadiness();
   List<SavedQuiz> quizzes = [];
   List<QuizFolder> folders = [];
   bool isLoading = true;
   bool isPicking = false;
-  bool isDownloading = false;
-  int downloadProgress = 0;
   bool modelInstalled = false;
   String? operationError;
 
@@ -142,13 +139,21 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     storage.addListener(_reloadLibrary);
+    widget.model.addListener(_modelChanged);
     _load();
   }
 
   @override
   void dispose() {
     storage.removeListener(_reloadLibrary);
+    widget.model.removeListener(_modelChanged);
     super.dispose();
+  }
+
+  void _modelChanged() {
+    if (mounted) {
+      setState(() => modelInstalled = widget.model.selectedInstalled);
+    }
   }
 
   Future<void> _reloadLibrary() async {
@@ -230,31 +235,11 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _downloadModel() async {
-    setState(() {
-      isDownloading = true;
-      downloadProgress = 0;
-      operationError = null;
-    });
-    try {
-      final issue = await deviceReadiness.checkForModelDownload();
-      if (issue != null) throw StateError(issue);
-      await widget.model.download(
-        onProgress: (progress) {
-          if (mounted) setState(() => downloadProgress = progress);
-        },
-      );
-      if (mounted) setState(() => modelInstalled = true);
-    } catch (error) {
-      if (mounted) {
-        setState(
-          () => operationError =
-              'Model download did not finish. Check your connection and free storage, then retry. ${_shortError(error)}',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isDownloading = false);
-    }
+  Future<void> _manageModels() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => ModelsPage(model: widget.model)),
+    );
+    if (mounted) await _load();
   }
 
   Future<void> _reviewQuiz(SavedQuiz quiz) async {
@@ -309,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Text(
-                                'Download and set up the offline model to use chat.',
+                                'Download and select an offline AI model to use chat.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 11,
@@ -517,6 +502,8 @@ class _HomePageState extends State<HomePage> {
   Widget _modelCard() {
     final error = widget.modelInitError;
     final available = modelInstalled && error == null;
+    final selected = widget.model.selectedModel;
+    final downloading = widget.model.downloadingId != null;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -555,22 +542,22 @@ class _HomePageState extends State<HomePage> {
                 Text(
                   error != null
                       ? 'Model runtime could not initialize.'
+                      : downloading
+                      ? 'Downloading model · ${widget.model.downloadProgress}%'
                       : available
-                      ? 'Gemma 4 E2B · available offline'
-                      : isDownloading
-                      ? 'Downloading model · $downloadProgress%'
-                      : 'Gemma 4 E2B · one-time 2.6 GB download',
+                      ? '${selected!.name} · quizzes and offline chat'
+                      : 'Choose a model for quizzes and offline chat.',
                   style: TextStyle(
                     fontSize: 11,
                     color: context.colors.onSurfaceVariant,
                   ),
                 ),
-                if (isDownloading) ...[
+                if (downloading) ...[
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
-                    value: downloadProgress == 0
+                    value: widget.model.downloadProgress == 0
                         ? null
-                        : downloadProgress / 100,
+                        : widget.model.downloadProgress / 100,
                     minHeight: 4,
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -579,16 +566,10 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(width: 8),
-          if (available)
-            Icon(
-              Icons.check_circle_rounded,
-              color: context.colors.onSecondaryContainer,
-            )
-          else
-            TextButton(
-              onPressed: isDownloading || error != null ? null : _downloadModel,
-              child: Text(isDownloading ? '$downloadProgress%' : 'Get model'),
-            ),
+          TextButton(
+            onPressed: error != null ? null : _manageModels,
+            child: const Text('Models'),
+          ),
         ],
       ),
     );
@@ -659,15 +640,18 @@ class _SetupPageState extends State<SetupPage> {
     title = TextEditingController(
       text: widget.document.name.replaceFirst(RegExp(r'\.[^.]+$'), ''),
     );
-    mcCount = TextEditingController(text: '5');
-    idCount = TextEditingController(text: '5');
-    easyCount = TextEditingController(text: '3');
-    mediumCount = TextEditingController(text: '4');
-    hardCount = TextEditingController(text: '3');
+    final compact = (widget.model.selectedModel?.maxQuizQuestions ?? 30) <= 5;
+    mcCount = TextEditingController(text: compact ? '3' : '5');
+    idCount = TextEditingController(text: compact ? '2' : '5');
+    easyCount = TextEditingController(text: compact ? '2' : '3');
+    mediumCount = TextEditingController(text: compact ? '2' : '4');
+    hardCount = TextEditingController(text: compact ? '1' : '3');
+    widget.model.addListener(_modelChanged);
   }
 
   @override
   void dispose() {
+    widget.model.removeListener(_modelChanged);
     title.dispose();
     mcCount.dispose();
     idCount.dispose();
@@ -675,6 +659,10 @@ class _SetupPageState extends State<SetupPage> {
     mediumCount.dispose();
     hardCount.dispose();
     super.dispose();
+  }
+
+  void _modelChanged() {
+    if (mounted) setState(() {});
   }
 
   int _value(TextEditingController controller) =>
@@ -721,8 +709,9 @@ class _SetupPageState extends State<SetupPage> {
     final mc = mode == ExamMode.identification ? 0 : _value(mcCount);
     final id = mode == ExamMode.multipleChoice ? 0 : _value(idCount);
     final total = mc + id;
-    if (total < 1 || total > 30) {
-      setState(() => error = 'Choose between 1 and 30 questions.');
+    final limit = widget.model.selectedModel?.maxQuizQuestions ?? 30;
+    if (total < 1 || total > limit) {
+      setState(() => error = 'Choose between 1 and $limit questions.');
       return;
     }
     if (_value(easyCount) + _value(mediumCount) + _value(hardCount) != total) {
@@ -747,7 +736,7 @@ class _SetupPageState extends State<SetupPage> {
     try {
       if (!await widget.model.isInstalled()) {
         throw StateError(
-          'Download the offline model on the home screen before generating a quiz.',
+          'Download and select an offline AI model on the home screen before generating a quiz.',
         );
       }
       if (!mounted) return;
@@ -787,6 +776,13 @@ class _SetupPageState extends State<SetupPage> {
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 110),
         children: [
           _fileSummary(context, widget.document),
+          const SizedBox(height: 12),
+          Text(
+            widget.model.selectedModel == null
+                ? 'Select an AI model on the home screen.'
+                : '${widget.model.selectedModel!.name} · ${widget.model.selectedModel!.quizLimits}',
+            style: TextStyle(color: context.colors.onSurfaceVariant),
+          ),
           const SizedBox(height: 21),
           _label(context, 'Quiz title'),
           TextField(
@@ -917,7 +913,7 @@ class _SetupPageState extends State<SetupPage> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
         child: FilledButton.icon(
-          onPressed: busy ? null : _generate,
+          onPressed: busy || widget.model.isManaging ? null : _generate,
           icon: busy
               ? SizedBox.square(
                   dimension: 18,
@@ -947,16 +943,18 @@ class _SetupPageState extends State<SetupPage> {
       child: InkWell(
         onTap: () => setState(() {
           mode = value;
+          final compact =
+              (widget.model.selectedModel?.maxQuizQuestions ?? 30) <= 5;
           mcCount.text = value == ExamMode.identification
               ? '0'
               : value == ExamMode.hybrid
-              ? '5'
-              : '10';
+              ? (compact ? '3' : '5')
+              : (compact ? '5' : '10');
           idCount.text = value == ExamMode.multipleChoice
               ? '0'
               : value == ExamMode.hybrid
-              ? '5'
-              : '10';
+              ? (compact ? '2' : '5')
+              : (compact ? '5' : '10');
           easyCount.text = '3';
           mediumCount.text = '4';
           hardCount.text = '3';
