@@ -1,0 +1,30 @@
+name: revai
+description: Offline study quizzes from your own documents.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+  flutter: '>=3.44.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  archive: ^4.3.0
+  file_picker: ^11.0.2
+  flutter_gemma: ^1.11.3
+  flutter_gemma_litertlm: ^1.8.4
+  flutter_markdown_plus: ^1.0.12
+  path_provider: ^2.1.5
+  pdf: ^3.13.1
+  pdfrx: ^2.5.0
+  printing: ^5.14.2
+  xml: ^7.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
